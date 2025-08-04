@@ -527,5 +527,12 @@ function Main {
   Start-InteractiveMode
 }
 
+# Run main function in interactive mode by default if no parameters are passed directly
+if ($MyInvocation.BoundParameters.Count -eq 0) {
+  $script:Interactive = $true
+  Main
+}
 # Run main function
-Main
+else {
+  Main
+}
