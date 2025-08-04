@@ -2,7 +2,7 @@
 # ====================================================================================================
 # EASY SUBTITLE EXTRACTOR - PowerShell Script
 # Requirements: FFmpeg (and FFprobe)
-# Version: 1.0
+# Version: 1.1
 # ====================================================================================================
 
 param(
@@ -66,7 +66,7 @@ function Show-Banner {
   Clear-Host
   Write-ColorText "╔══════════════════════════════════════════════════════════════════════════╗" "Cyan"
   Write-ColorText "║                        🎬 SUBTITLE EXTRACTOR 🎬                          ║" "Cyan"
-  Write-ColorText "║                         PowerShell Edition v1.0                          ║" "Cyan"
+  Write-ColorText "║                         PowerShell Edition v1.1                          ║" "Cyan"
   Write-ColorText "╚══════════════════════════════════════════════════════════════════════════╝" "Cyan"
   Write-ColorText ""
 }
