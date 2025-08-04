@@ -2,7 +2,7 @@
 # ====================================================================================================
 # EASY SUBTITLE EXTRACTOR - PowerShell Script
 # Requirements: FFmpeg (and FFprobe)
-# Version: 1.1
+# Version: 2.0
 # ====================================================================================================
 
 param(
@@ -66,7 +66,7 @@ function Show-Banner {
   Clear-Host
   Write-ColorText "╔══════════════════════════════════════════════════════════════════════════╗" "Cyan"
   Write-ColorText "║                        🎬 SUBTITLE EXTRACTOR 🎬                          ║" "Cyan"
-  Write-ColorText "║                         PowerShell Edition v1.1                          ║" "Cyan"
+  Write-ColorText "║                         PowerShell Edition v2.0                          ║" "Cyan"
   Write-ColorText "╚══════════════════════════════════════════════════════════════════════════╝" "Cyan"
   Write-ColorText ""
 }
@@ -236,49 +236,81 @@ function Export-SubtitleStream {
   $ffmpegCmd = if ($FFmpegPath) { $FFmpegPath } else { "ffmpeg" }
   $videoFileName = [System.IO.Path]::GetFileNameWithoutExtension($VideoPath)
   $language = if ($Stream.Language -and $Stream.Language -ne "unknown") { "_$($Stream.Language)" } else { "" }
-  $outputFileName = "${videoFileName}_subtitle_${StreamNumber}${language}.srt"
-  $outputPath = Join-Path $OutputDir $outputFileName
-  Write-ColorText "════════════════════════════════════════════════════" "Cyan"
-  Write-ColorText "⏳ Extracting stream $StreamNumber (real index: $($Stream.Index))..." "Yellow"
-  Write-ColorText "📝 Output file: $outputFileName" "Gray"
-  # Multiple extraction strategies
-  $extractionCommands = @(
-    # Main command: convert to SRT
-    @('-i', $VideoPath, '-map', "0:s:$($Stream.Index)", '-c:s', 'srt', '-avoid_negative_ts', 'make_zero', $outputPath),
-    @('-i', $VideoPath, '-map', "0:$($Stream.Index)", '-c:s', 'srt', '-avoid_negative_ts', 'make_zero', $outputPath),
-    # Alternative command for ASS/SSA
-    @('-i', $VideoPath, '-map', "0:s:$($Stream.Index)", '-f', 'srt', $outputPath),
-    # Generic alternative command
-    @('-i', $VideoPath, '-map', "0:$($Stream.Index)", '-c:s', 'copy', $outputPath)
-  )
-  $extractionSuccessful = $false
-  foreach ($command in $extractionCommands) {
+  $codec = if ($Stream.Codec) { $Stream.Codec.ToLower() } else { "" }
+  $isPGS = ($codec -eq "hdmv_pgs_subtitle" -or $codec -eq "pgs")
+  if ($isPGS) {
+    $outputFileName = "${videoFileName}_subtitle_${StreamNumber}${language}.sup"
+    $outputPath = Join-Path $OutputDir $outputFileName
+    Write-ColorText "════════════════════════════════════════════════════" "Cyan"
+    Write-ColorText "⏳ Extracting stream $StreamNumber (real index: $($Stream.Index))..." "Yellow"
+    Write-ColorText "📝 Output file: $outputFileName" "Gray"
+    Write-ColorText "⚠️  This subtitle is PGS (image-based). It will be extracted as .sup. To convert to text, use OCR tools like Subtitle Edit." "Yellow"
+    $cmd = @('-i', $VideoPath, '-map', "0:s:$($Stream.Index)", '-c:s', 'copy', $outputPath)
     try {
       Write-ColorText "⚙️  Running FFmpeg..." "Gray"
-      & $ffmpegCmd @command 2>&1 | Out-Null
+      & $ffmpegCmd @cmd 2>&1 | Out-Null
       if ($LASTEXITCODE -eq 0 -and (Test-Path $outputPath)) {
         $fileSize = (Get-Item $outputPath).Length
         if ($fileSize -gt 0) {
           Write-ColorText "✅ Subtitle extracted successfully!" "Green"
           Write-ColorText "📁 Location: $outputPath" "Green"
           Write-ColorText "📊 Size: $([math]::Round($fileSize / 1KB, 2)) KB" "Green"
-          $extractionSuccessful = $true
-          break
+          return $true
         }
       }
+      Write-ColorText "❌ Error: Could not extract PGS subtitle." "Red"
+      return $false
     }
     catch {
-      continue
+      Write-ColorText "❌ Error: Could not extract PGS subtitle." "Red"
+      return $false
     }
   }
-  if (-not $extractionSuccessful) {
-    Write-ColorText "❌ Error: Could not extract stream $($Stream.Index)" "Red"
-    Write-ColorText "Possible causes:" "Yellow"
-    Write-ColorText "• The stream does not contain text subtitles" "Gray"
-    Write-ColorText "• The subtitle format is not supported" "Gray"
-    Write-ColorText "• The subtitles are images (PGS/VobSub)" "Gray"
+  else {
+    $outputFileName = "${videoFileName}_subtitle_${StreamNumber}${language}.srt"
+    $outputPath = Join-Path $OutputDir $outputFileName
+    Write-ColorText "════════════════════════════════════════════════════" "Cyan"
+    Write-ColorText "⏳ Extracting stream $StreamNumber (real index: $($Stream.Index))..." "Yellow"
+    Write-ColorText "📝 Output file: $outputFileName" "Gray"
+    # Multiple extraction strategies
+    $extractionCommands = @(
+      # Main command: convert to SRT
+      @('-i', $VideoPath, '-map', "0:s:$($Stream.Index)", '-c:s', 'srt', '-avoid_negative_ts', 'make_zero', $outputPath),
+      @('-i', $VideoPath, '-map', "0:$($Stream.Index)", '-c:s', 'srt', '-avoid_negative_ts', 'make_zero', $outputPath),
+      # Alternative command for ASS/SSA
+      @('-i', $VideoPath, '-map', "0:s:$($Stream.Index)", '-f', 'srt', $outputPath),
+      # Generic alternative command
+      @('-i', $VideoPath, '-map', "0:$($Stream.Index)", '-c:s', 'copy', $outputPath)
+    )
+    $extractionSuccessful = $false
+    foreach ($command in $extractionCommands) {
+      try {
+        Write-ColorText "⚙️  Running FFmpeg..." "Gray"
+        & $ffmpegCmd @command 2>&1 | Out-Null
+        if ($LASTEXITCODE -eq 0 -and (Test-Path $outputPath)) {
+          $fileSize = (Get-Item $outputPath).Length
+          if ($fileSize -gt 0) {
+            Write-ColorText "✅ Subtitle extracted successfully!" "Green"
+            Write-ColorText "📁 Location: $outputPath" "Green"
+            Write-ColorText "📊 Size: $([math]::Round($fileSize / 1KB, 2)) KB" "Green"
+            $extractionSuccessful = $true
+            break
+          }
+        }
+      }
+      catch {
+        continue
+      }
+    }
+    if (-not $extractionSuccessful) {
+      Write-ColorText "❌ Error: Could not extract stream $($Stream.Index)" "Red"
+      Write-ColorText "Possible causes:" "Yellow"
+      Write-ColorText "• The stream does not contain text subtitles" "Gray"
+      Write-ColorText "• The subtitle format is not supported" "Gray"
+      Write-ColorText "• The subtitles are images (PGS/VobSub)" "Gray"
+    }
+    return $extractionSuccessful
   }
-  return $extractionSuccessful
 }
 
 ## Function to select file interactively
